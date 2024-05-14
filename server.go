@@ -8,37 +8,47 @@ import (
 )
 
 func main() {
-	fmt.Println("starting")
+	fmt.Println("starting the server")
 
-	l, err := net.Listen("tcp", "0.0.0.0:4221")
+	listener, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
-		fmt.Println("failed to bind to port 4221")
+		fmt.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
+	defer func(listener net.Listener) {
+		err := listener.Close()
+		if err != nil {
+			fmt.Println("error closing listener: ", err.Error())
+			os.Exit(1)
+		}
+	}(listener)
 
 	for {
-		con, err := l.Accept()
+		con, err := listener.Accept()
 		if err != nil {
 			fmt.Println("error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
 
 		buffer := make([]byte, 1024)
-		n, err := con.Read(buffer)
+		contentLength, err := con.Read(buffer)
 		if err != nil {
 			fmt.Println("error reading response: ", err.Error())
 			os.Exit(1)
 		}
 
-		requestContent := string(buffer[:n])
+		requestContent := string(buffer[:contentLength])
 		requestLines := strings.Split(requestContent, "\r\n")
 		route := strings.Split(requestLines[0], " ")[1]
 
 		var response string
-		switch route {
-		case "/":
+
+		if strings.HasPrefix(route, "/echo/") {
+			message := route[len("/echo/"):]
+			response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message)
+		} else if route == "/" {
 			response = "HTTP/1.1 200 OK\r\n\r\n"
-		default:
+		} else {
 			response = "HTTP/1.1 404 Not Found\r\n\r\n"
 		}
 
