@@ -12,7 +12,7 @@ func main() {
 
 	listener, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
-		fmt.Println("Failed to bind to port 4221")
+		fmt.Println("failed to bind to port 4221")
 		os.Exit(1)
 	}
 	defer func(listener net.Listener) {
@@ -39,29 +39,22 @@ func main() {
 
 		requestContent := string(buffer[:contentLength])
 		requestLines := strings.Split(requestContent, "\r\n")
+		headersLine := requestLines[1 : len(requestLines)-1-1]
+		headers := make(map[string]string)
+		for _, header := range headersLine {
+			keyValuePair := strings.Split(header, ": ")
+			headers[strings.ToLower(keyValuePair[0])] = keyValuePair[1]
+		}
 		route := strings.Split(requestLines[0], " ")[1]
 
-		var response string
-
 		if strings.HasPrefix(route, "/echo/") {
-			message := route[len("/echo/"):]
-			response = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message)
+			handleEcho(con, route)
+		} else if route == "/user-agent" {
+			handleUserAgent(con, headers["user-agent"])
 		} else if route == "/" {
-			response = "HTTP/1.1 200 OK\r\n\r\n"
+			handleHome(con)
 		} else {
-			response = "HTTP/1.1 404 Not Found\r\n\r\n"
-		}
-
-		_, err = con.Write([]byte(response))
-		if err != nil {
-			fmt.Println("error writing response: ", err.Error())
-			os.Exit(1)
-		}
-
-		err = con.Close()
-		if err != nil {
-			fmt.Println("error closing connection: ", err.Error())
-			os.Exit(1)
+			handleNotFound(con)
 		}
 	}
 }
