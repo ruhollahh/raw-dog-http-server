@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func handleFileUpload(connection net.Conn, route string, fileContent []byte) {
@@ -98,10 +101,33 @@ func handleHome(connection net.Conn) {
 	}
 }
 
-func handleEcho(connection net.Conn, route string) {
+func handleEcho(connection net.Conn, route string, reqHeaders map[string]string) {
 	message := route[len("/echo/"):]
-	response := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(message), message)
-	_, err := connection.Write([]byte(response))
+
+	acceptEncoding := reqHeaders["accept-encoding"]
+	var contentEncodingHeader string
+	var resBodyBuffer bytes.Buffer
+	if strings.Contains(acceptEncoding, "gzip") {
+		contentEncodingHeader = fmt.Sprintf("Content-Encoding: %s\r\n", "gzip")
+
+		gz := gzip.NewWriter(&resBodyBuffer)
+		_, err := gz.Write([]byte(message))
+		if err != nil {
+			fmt.Println("error encoding response to gzip", err)
+		}
+		err = gz.Close()
+		if err != nil {
+			fmt.Println("error closing gzip writer", err)
+		}
+	} else {
+		resBodyBuffer.Write([]byte(message))
+	}
+
+	resBody := resBodyBuffer.Bytes()
+	resHeaders := fmt.Sprintf("Content-Type: text/plain\r\nContent-Length: %d\r\n%s", len(resBody), contentEncodingHeader)
+
+	response := fmt.Sprintf("HTTP/1.1 200 OK\r\n%s\r\n", resHeaders)
+	_, err := connection.Write(append([]byte(response), resBody...))
 	if err != nil {
 		fmt.Println("error writing response: ", err.Error())
 		os.Exit(1)

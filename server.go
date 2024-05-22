@@ -13,7 +13,7 @@ var directory string
 func main() {
 	fmt.Println("starting the server")
 
-	flag.StringVar(&directory, "directory", "./files", "directory of files")
+	flag.StringVar(&directory, "directory", "", "directory of files")
 	flag.Parse()
 
 	listener, err := net.Listen("tcp", "0.0.0.0:4221")
@@ -41,7 +41,7 @@ func main() {
 }
 
 func handleConnection(connection net.Conn) {
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 2048)
 	contentLength, err := connection.Read(buffer)
 	if err != nil {
 		fmt.Println("error reading response: ", err.Error())
@@ -54,10 +54,10 @@ func handleConnection(connection net.Conn) {
 	requestLine := requestHeadParts[0]
 	requestHeaders := requestHeadParts[1:]
 
-	headers := make(map[string]string)
+	requestHeadersMap := make(map[string]string)
 	for _, header := range requestHeaders {
 		keyValuePair := strings.Split(header, ": ")
-		headers[strings.ToLower(keyValuePair[0])] = keyValuePair[1]
+		requestHeadersMap[strings.ToLower(keyValuePair[0])] = keyValuePair[1]
 	}
 
 	requestLineParts := strings.Split(requestLine, " ")
@@ -73,10 +73,10 @@ func handleConnection(connection net.Conn) {
 			return
 		}
 	} else if strings.HasPrefix(route, "/echo/") {
-		handleEcho(connection, route)
+		handleEcho(connection, route, requestHeadersMap)
 		return
 	} else if route == "/user-agent" {
-		handleUserAgent(connection, headers["user-agent"])
+		handleUserAgent(connection, requestHeadersMap["user-agent"])
 		return
 	} else if route == "/" {
 		handleHome(connection)
